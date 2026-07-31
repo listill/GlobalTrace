@@ -23,6 +23,68 @@ describe("filter panel suggestions", () => {
     expect(onChange).toHaveBeenCalledWith("Falkenstein");
   });
 
+  it("selects labeled suggestion values while showing labels", () => {
+    const onChange = vi.fn();
+    const options = [
+      { value: "DE", label: "德国 (DE)", searchText: "德国 (DE) DE" },
+      { value: "US", label: "美国 (US)", searchText: "美国 (US) US" },
+    ];
+
+    const { rerender } = render(
+      <SuggestionInput
+        label="国家/地区"
+        value=""
+        options={options}
+        onChange={onChange}
+      />,
+    );
+
+    const input = screen.getByRole("combobox", { name: "国家/地区" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "美" } });
+    rerender(
+      <SuggestionInput
+        label="国家/地区"
+        value="美"
+        options={options}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "美国 (US)",
+    ]);
+    fireEvent.mouseDown(screen.getByRole("option", { name: "美国 (US)" }));
+    expect(onChange).toHaveBeenCalledWith("US");
+  });
+
+  it("caps empty and filtered regular suggestions at eight options", () => {
+    const options = Array.from({ length: 20 }, (_, index) =>
+      `match-${String.fromCharCode(65 + index)}`,
+    );
+
+    const { rerender } = render(
+      <SuggestionInput
+        label="国家/地区"
+        value=""
+        options={options}
+        onChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.focus(screen.getByRole("combobox", { name: "国家/地区" }));
+    expect(screen.getAllByRole("option")).toHaveLength(8);
+
+    rerender(
+      <SuggestionInput
+        label="国家/地区"
+        value="match"
+        options={options}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByRole("option")).toHaveLength(8);
+  });
+
   it("closes regular suggestions on Escape and blur", () => {
     render(
       <SuggestionInput

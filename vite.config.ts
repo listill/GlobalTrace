@@ -17,14 +17,24 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/maplibre-gl") && !id.endsWith(".css")) return "vendor-maplibre";
-          if (id.includes("node_modules/three")) return "vendor-three";
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) return "vendor-react";
+          const normalizedId = id.replaceAll("\\", "/");
+          if (normalizedId.includes("/node_modules/maplibre-gl/") && !normalizedId.endsWith(".css")) return "vendor-maplibre";
+          if (normalizedId.includes("/node_modules/three/")) return "vendor-three";
+          if (
+            normalizedId.includes("/node_modules/react/") ||
+            normalizedId.includes("/node_modules/react-dom/")
+          ) return "vendor-react";
         },
       },
     },
   },
   server: {
     host: "127.0.0.1",
+    proxy: {
+      "/api": {
+        target: `http://127.0.0.1:${process.env.GLOBALTRACE_WORKER_PORT || 8787}`,
+        changeOrigin: true,
+      },
+    },
   },
 });

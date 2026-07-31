@@ -33,6 +33,7 @@ describe("AdvancedParamsPanel", () => {
       "href",
       "https://api.nxtrace.org/v4/api-tokens",
     );
+    expect(screen.getByRole("link", { name: "获取 NextTrace API Token" })).toHaveTextContent("获取 Token");
 
     fireEvent.click(screen.getByRole("button", { name: "保存 Globalping" }));
     fireEvent.click(screen.getByRole("button", { name: "清除 Globalping" }));
@@ -73,34 +74,6 @@ describe("AdvancedParamsPanel", () => {
     expect(onNexttraceTokenRememberedChange).toHaveBeenCalledWith(true);
   });
 
-  it("updates liquid glass settings and disables intensity when off", () => {
-    const onLiquidGlassEnabledChange = vi.fn();
-    const onLiquidGlassIntensityChange = vi.fn();
-    const { rerender } = render(
-      <AdvancedParamsPanel
-        {...defaultProps({
-          liquidGlassEnabled: true,
-          liquidGlassIntensity: 72,
-          onLiquidGlassEnabledChange,
-          onLiquidGlassIntensityChange,
-        })}
-      />,
-    );
-
-    const intensity = screen.getByLabelText("液态玻璃强度");
-    expect(intensity).toHaveValue("72");
-    expect(intensity).not.toBeDisabled();
-
-    fireEvent.click(screen.getByRole("switch", { name: "液态玻璃效果" }));
-    fireEvent.change(intensity, { target: { value: "35" } });
-
-    expect(onLiquidGlassEnabledChange).toHaveBeenCalledWith(false);
-    expect(onLiquidGlassIntensityChange).toHaveBeenCalledWith(35);
-
-    rerender(<AdvancedParamsPanel {...defaultProps({ liquidGlassEnabled: false })} />);
-    expect(screen.getByLabelText("液态玻璃强度")).toBeDisabled();
-  });
-
   it("updates result content order from the radiogroup", () => {
     const onResultContentOrderChange = vi.fn();
 
@@ -113,13 +86,45 @@ describe("AdvancedParamsPanel", () => {
       />,
     );
 
-    const layoutGroup = screen.getByRole("radiogroup", { name: "结果页面显示顺序" });
+    const layoutGroup = screen.getByRole("radiogroup", { name: "显示模式 · 仅桌面端有效" });
     expect(within(layoutGroup).getByRole("radio", { name: "地图优先" })).toBeChecked();
     expect(within(layoutGroup).getByRole("radio", { name: "表格优先" })).not.toBeChecked();
 
     fireEvent.click(within(layoutGroup).getByRole("radio", { name: "表格优先" }));
 
     expect(onResultContentOrderChange).toHaveBeenCalledWith("table-first");
+  });
+
+  it.each([
+    ["map-first", "ArrowLeft", "table-first"],
+    ["map-first", "ArrowUp", "table-first"],
+    ["table-first", "ArrowRight", "map-first"],
+    ["table-first", "ArrowDown", "map-first"],
+  ] as const)("moves and selects from %s with %s", (current, key, expected) => {
+    const onResultContentOrderChange = vi.fn();
+    render(
+      <AdvancedParamsPanel
+        {...defaultProps({
+          resultContentOrder: current,
+          onResultContentOrderChange,
+        })}
+      />,
+    );
+
+    const currentOption = screen.getByRole("radio", {
+      name: current === "map-first" ? "地图优先" : "表格优先",
+    });
+    const expectedOption = screen.getByRole("radio", {
+      name: expected === "map-first" ? "地图优先" : "表格优先",
+    });
+    expect(currentOption).toHaveAttribute("tabindex", "0");
+    expect(expectedOption).toHaveAttribute("tabindex", "-1");
+
+    currentOption.focus();
+    fireEvent.keyDown(currentOption, { key });
+
+    expect(onResultContentOrderChange).toHaveBeenCalledWith(expected);
+    expect(expectedOption).toHaveFocus();
   });
 });
 
@@ -136,6 +141,13 @@ function defaultProps(overrides: Partial<FilterPanelProps> = {}): FilterPanelPro
     visibleProbes: 0,
     totalProbes: 0,
     probesStatus: "ready",
+    quota: {
+      status: "ready",
+      remaining: 245,
+      limit: 250,
+      actor: "当前 IP",
+      modeLabel: "Globalping credits 控制诊断创建",
+    },
     selectionNotice: "",
     loading: false,
     canSubmit: true,
@@ -146,8 +158,6 @@ function defaultProps(overrides: Partial<FilterPanelProps> = {}): FilterPanelPro
     nexttraceTokenSaved: false,
     nexttraceTokenRemembered: false,
     themeMode: "system",
-    liquidGlassEnabled: true,
-    liquidGlassIntensity: 50,
     resultContentOrder: "map-first",
     onTargetChange: vi.fn(),
     onProtocolChange: vi.fn(),
@@ -165,8 +175,6 @@ function defaultProps(overrides: Partial<FilterPanelProps> = {}): FilterPanelPro
     onClearNexttraceToken: vi.fn(),
     onNexttraceTokenRememberedChange: vi.fn(),
     onCycleThemeMode: vi.fn(),
-    onLiquidGlassEnabledChange: vi.fn(),
-    onLiquidGlassIntensityChange: vi.fn(),
     onResultContentOrderChange: vi.fn(),
     onNavigateHome: vi.fn(),
     onNavigateAbout: vi.fn(),
