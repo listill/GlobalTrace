@@ -299,7 +299,8 @@ describe("FilterPanel", () => {
     const onProtocolChange = vi.fn();
     renderPanel({ onFiltersChange, onProtocolChange });
 
-    fireEvent.click(screen.getByRole("button", { name: "TCP" }));
+    const protocolGroup = screen.getByRole("group", { name: "协议" });
+    fireEvent.click(within(protocolGroup).getByRole("button", { name: "TCP" }));
     openExactFilters();
     fireEvent.click(screen.getByLabelText("Eyeball"));
 
@@ -990,6 +991,22 @@ describe("FilterPanel", () => {
     renderPanel({ canSubmit: false });
 
     expect(screen.getByRole("button", { name: "开始网络路径诊断" })).toBeDisabled();
+  });
+
+  it("submits from the target input when Enter is pressed", () => {
+    const onSubmit = vi.fn();
+    renderPanel({ canSubmit: true, onSubmit });
+
+    fireEvent.submit(screen.getByLabelText("目标").closest("form")!);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not submit from Enter while the run action is disabled", () => {
+    const onSubmit = vi.fn();
+    renderPanel({ canSubmit: false, onSubmit });
+
+    fireEvent.submit(screen.getByLabelText("目标").closest("form")!);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("warns when the probe limit is above the default and can reduce it", () => {

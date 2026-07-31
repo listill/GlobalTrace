@@ -1,7 +1,7 @@
 import "./maplibre.css";
 import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from "maplibre-gl";
 import { Clock3, ExternalLink, Globe2, Map as MapIcon, Route, Share2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { FeatureCollection } from "geojson";
 import { MAX_TRACE_PACKETS, type TraceHop, type TraceProbeResult, type TraceResultResponse } from "../../shared/types";
 import {
@@ -187,7 +187,7 @@ export function ResultsView({
 
       <Tabs className="probe-tabs-root" value={String(activeIndex)} onValueChange={(value) => selectProbe(Number(value))}>
         <div className="probe-tabs-frame">
-          <TabsList unstyled className="probe-tabs" aria-label="probe results">
+          <TabsList unstyled className="probe-tabs" aria-label={messages.probeResults}>
             {result.results.map((item, index) => {
               const targetMetrics = routeTargetMetrics(item, messages);
               return (
@@ -230,8 +230,8 @@ export function ResultsView({
           )}
 
           {hopContent}
-          {active && active.hops.length > 0 && <HopRawDetails active={active} />}
           {resultMap}
+          {active && active.hops.length > 0 && <HopRawDetails active={active} />}
         </TabsContent>
       </Tabs>
     </section>
@@ -256,7 +256,7 @@ function ResultMapToolbar({
           type="button"
           aria-pressed={mapProjection === "mercator"}
           aria-label={messages.switchResultMap2d}
-          disabled={!onMapProjectionChange && mapProjection !== "mercator"}
+          disabled={!onMapProjectionChange}
           onClick={() => onMapProjectionChange?.("mercator")}
         >
           <MapIcon size={16} />
@@ -269,7 +269,7 @@ function ResultMapToolbar({
           type="button"
           aria-pressed={mapProjection === "globe"}
           aria-label={messages.switchResultMap3d}
-          disabled={!onMapProjectionChange && mapProjection !== "globe"}
+          disabled={!onMapProjectionChange}
           onClick={() => onMapProjectionChange?.("globe")}
         >
           <Globe2 size={16} />
@@ -282,22 +282,39 @@ function ResultMapToolbar({
 
 function ShareButton({ measurementId }: { measurementId: string }) {
   const messages = useI18n();
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const resetTimerRef = useRef<number | null>(null);
   const shareUrl = useMemo(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("measurement", measurementId);
     return url.toString();
   }, [measurementId]);
 
+  useEffect(() => () => {
+    if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+  }, []);
+
+  const showCopyStatus = (status: "copied" | "failed") => {
+    if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+    setCopyStatus(status);
+    resetTimerRef.current = window.setTimeout(() => {
+      resetTimerRef.current = null;
+      setCopyStatus("idle");
+    }, 1200);
+  };
+
   const copy = async () => {
-    if (!navigator.clipboard) return;
+    if (!navigator.clipboard) {
+      showCopyStatus("failed");
+      return;
+    }
     try {
       await navigator.clipboard.writeText(shareUrl);
     } catch {
+      showCopyStatus("failed");
       return;
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
+    showCopyStatus("copied");
   };
 
   return (
@@ -312,7 +329,13 @@ function ShareButton({ measurementId }: { measurementId: string }) {
       }}
     >
       <Share2 size={16} />
-      {copied ? messages.copied : messages.share}
+      <span aria-live="polite">
+        {copyStatus === "copied"
+          ? messages.copied
+          : copyStatus === "failed"
+            ? messages.copyFailed
+            : messages.share}
+      </span>
     </Button>
   );
 }
@@ -548,11 +571,14 @@ function ResultMap({
   const [pinnedGroupId, setPinnedGroupId] = useState<string | null>(null);
   const [previewRouteNodeId, setPreviewRouteNodeId] = useState<string | null>(null);
   const expandedGroupId = pinnedGroupId;
-  dataRef.current = data;
-  selectedRouteNodeIdRef.current = selectedRouteNodeId;
-  mapFocusRequestRef.current = mapFocusRequest;
-  previewRouteNodeIdRef.current = previewRouteNodeId;
-  onSelectRouteRef.current = onSelectRoute;
+
+  useLayoutEffect(() => {
+    dataRef.current = data;
+    selectedRouteNodeIdRef.current = selectedRouteNodeId;
+    mapFocusRequestRef.current = mapFocusRequest;
+    previewRouteNodeIdRef.current = previewRouteNodeId;
+    onSelectRouteRef.current = onSelectRoute;
+  }, [data, mapFocusRequest, onSelectRoute, previewRouteNodeId, selectedRouteNodeId]);
 
   const previewRouteNode = (node: ResultRouteNode) => {
     setPreviewRouteNodeId(node.nodeId);
@@ -691,9 +717,35 @@ function ResultMap({
     };
     map.on("error", handleMapError);
     map.on("load", handleMapLoad);
+    const slideoverRoot = container.closest(".result-slideover");
+    const isSlideoverResizing = () =>
+      slideoverRoot?.getAttribute("data-resizing") === "true";
     const resizeObserver =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => map.resize());
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            // Skip while the sheet is being dragged; resize once on release.
+            if (isSlideoverResizing()) return;
+            map.resize();
+          });
     resizeObserver?.observe(container);
+    // When data-resizing flips true → false, sync map once.
+    const resizingObserver =
+      slideoverRoot && typeof MutationObserver !== "undefined"
+        ? new MutationObserver((records) => {
+            for (const record of records) {
+              if (record.type !== "attributes" || record.attributeName !== "data-resizing") continue;
+              if (slideoverRoot.getAttribute("data-resizing") !== "false") continue;
+              map.resize();
+            }
+          })
+        : null;
+    if (slideoverRoot && resizingObserver) {
+      resizingObserver.observe(slideoverRoot, {
+        attributes: true,
+        attributeFilter: ["data-resizing"],
+      });
+    }
     resizeFrameId = window.requestAnimationFrame(() => {
       resizeFrameId = null;
       map.resize();
@@ -710,6 +762,7 @@ function ResultMap({
     }
     return () => {
       unsubscribePalette();
+      resizingObserver?.disconnect();
       resizeObserver?.disconnect();
       if (revealFrameId !== null) window.cancelAnimationFrame(revealFrameId);
       if (resizeFrameId !== null) window.cancelAnimationFrame(resizeFrameId);
@@ -780,18 +833,19 @@ function ResultMap({
   }, [data, mapFocusRequest, selectedRouteNodeId]);
 
   return (
-    <div
-      className={`result-map${mapProjection === "globe" ? " result-map-globe" : ""}`}
-      data-map-projection={mapProjection}
-      ref={containerRef}
-      aria-label="trace result map"
-    >
+    <>
+      <div
+        className={`result-map${mapProjection === "globe" ? " result-map-globe" : ""}`}
+        data-map-projection={mapProjection}
+        ref={containerRef}
+        aria-label={messages.resultMap}
+      />
       {mapLoadError && (
         <div className="map-load-error" role="alert">
           {messages.mapLoadError}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
