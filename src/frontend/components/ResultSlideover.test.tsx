@@ -53,6 +53,7 @@ describe("ResultSlideover", () => {
     expect(root.dataset.open).toBe("false");
     expect(screen.queryByRole("dialog", { name: "诊断结果" })).not.toBeInTheDocument();
     expect(document.querySelector(".result-slideover-peek")).not.toBeNull();
+    expect(document.querySelector(".result-slideover-peek-hit")).not.toBeNull();
     expect(document.querySelector(".result-slideover-peek-grip")).not.toBeNull();
     expect(document.querySelector(".result-slideover-peek-label")).toHaveTextContent("诊断结果");
     expect(document.querySelector(".result-slideover-panel")).toHaveAttribute("aria-hidden", "true");
@@ -615,6 +616,33 @@ describe("ResultSlideover", () => {
     );
   });
 
+  it("keeps a real overflow hit target above the mobile peek grip", () => {
+    mockMatchMedia(true);
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+
+    render(
+      <I18nProvider locale="zh-CN">
+        <ResultSlideover open={false} title="诊断结果" onOpen={vi.fn()} onClose={vi.fn()}>
+          <div>result body</div>
+        </ResultSlideover>
+      </I18nProvider>,
+    );
+
+    const hit = document.querySelector(".result-slideover-peek-hit") as HTMLElement;
+    expect(hit).not.toBeNull();
+    expect(hit.getAttribute("aria-hidden")).toBe("true");
+    // jsdom does not apply stylesheet layout; assert the dedicated hit node exists
+    // inside the peek control (replacing the non-hittable overflowing ::after).
+    expect(hit.parentElement).toHaveClass("result-slideover-peek");
+  });
+
   it("uses a bottom sheet height under 820px and resizes vertically", () => {
     mockMatchMedia(true);
     Object.defineProperty(window, "innerWidth", {
@@ -689,6 +717,33 @@ describe("ResultSlideover", () => {
       clientY: 200 + (startHeight - 180),
       pointerId: 5,
     });
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("collapses the bottom sheet when the grab chrome is tapped without movement", () => {
+    mockMatchMedia(true);
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    const onClose = vi.fn();
+
+    render(
+      <I18nProvider locale="zh-CN">
+        <ResultSlideover open title="诊断结果" onOpen={vi.fn()} onClose={onClose}>
+          <div>result body</div>
+        </ResultSlideover>
+      </I18nProvider>,
+    );
+
+    const handle = screen.getByRole("separator", { name: "拖拽调整结果面板高度" });
+    fireEvent.pointerDown(handle, { button: 0, clientY: 240, pointerId: 8 });
+    fireEvent.pointerUp(handle, { clientY: 240, pointerId: 8 });
 
     expect(onClose).toHaveBeenCalledOnce();
   });

@@ -69,6 +69,7 @@ type ResizeSession = {
   startY: number;
   startWidth: number;
   startHeight: number;
+  maxDelta: number;
 };
 
 type ExpandSession = {
@@ -202,10 +203,17 @@ export function ResultSlideover({
   );
 
   const finishResize = useCallback((pointerId: number) => {
-    if (resizeRef.current?.pointerId !== pointerId) return;
+    const session = resizeRef.current;
+    if (!session || session.pointerId !== pointerId) return;
+    const maxDelta = session.maxDelta;
     resizeRef.current = null;
     setResizing(false);
     if (isMobile) {
+      // Tap the grab chrome (no meaningful move) collapses, matching the peek UX.
+      if (maxDelta < OPEN_TAP_SLOP_PX) {
+        onClose();
+        return;
+      }
       const nextHeight = sizeRef.current.height;
       if (nextHeight < COLLAPSE_HEIGHT_PX) {
         // Do not restore size here — that flashes full height before slide-out.
@@ -359,6 +367,7 @@ export function ResultSlideover({
       startY: event.clientY,
       startWidth: width,
       startHeight: height,
+      maxDelta: 0,
     };
     setResizing(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -369,11 +378,15 @@ export function ResultSlideover({
     const drag = resizeRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (isMobile) {
+      const travel = Math.abs(drag.startY - event.clientY);
+      drag.maxDelta = Math.max(drag.maxDelta, travel);
       const next = clampDragPanelHeight(drag.startHeight + (drag.startY - event.clientY));
       sizeRef.current = { ...sizeRef.current, height: next };
       setHeight(next);
       return;
     }
+    const travel = Math.abs(drag.startX - event.clientX);
+    drag.maxDelta = Math.max(drag.maxDelta, travel);
     const next = clampDragPanelWidth(drag.startWidth + (drag.startX - event.clientX));
     sizeRef.current = { ...sizeRef.current, width: next };
     setWidth(next);
@@ -585,6 +598,8 @@ export function ResultSlideover({
           onPointerCancel={(event) => abortExpand(event.pointerId)}
           onLostPointerCapture={(event) => abortExpand(event.pointerId)}
         >
+          {/* Real node: overflowing ::after is not hit-tested outside this transformed ancestor. */}
+          <span className="result-slideover-peek-hit" aria-hidden="true" />
           <span className="result-slideover-peek-grip" aria-hidden="true" />
           <span className="result-slideover-peek-label">{title}</span>
         </button>

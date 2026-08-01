@@ -634,7 +634,19 @@ test("result sheet exposes keyboard focus and resizes its live map after draggin
   await peek.focus();
   await expect(peek).toBeFocused();
   expect(await peek.evaluate((node) => node.matches(":focus-visible"))).toBe(true);
-  expect(await peek.evaluate((node) => getComputedStyle(node).outlineStyle)).not.toBe("none");
+  expect(await peek.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe("none");
+  expect(
+    await peek.evaluate((node) => {
+      const grip = node.querySelector(".result-slideover-peek-grip");
+      if (!(grip instanceof HTMLElement)) return false;
+      const style = getComputedStyle(grip);
+      return (
+        getComputedStyle(node).outlineStyle === "none" &&
+        Number.parseFloat(style.opacity) >= 0.99 &&
+        style.boxShadow.includes("0px 0px 0px 3px")
+      );
+    }),
+  ).toBe(true);
   await peek.press("Enter");
   await expect(slideover).toHaveAttribute("data-open", "true");
 
@@ -642,7 +654,16 @@ test("result sheet exposes keyboard focus and resizes its live map after draggin
   await handle.focus();
   await expect(handle).toBeFocused();
   expect(await handle.evaluate((node) => node.matches(":focus-visible"))).toBe(true);
-  expect(await handle.evaluate((node) => getComputedStyle(node).outlineStyle)).not.toBe("none");
+  expect(await handle.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe("none");
+  expect(
+    await handle.evaluate((node) => {
+      const grip = getComputedStyle(node, "::after");
+      return (
+        Number.parseFloat(grip.opacity) >= 0.99 &&
+        grip.boxShadow.includes("0px 0px 0px 3px")
+      );
+    }),
+  ).toBe(true);
 
   const panel = page.locator(".result-slideover-panel");
   const mapCanvas = page.locator(".result-map canvas.maplibregl-canvas");
