@@ -69,7 +69,7 @@ type ResizeSession = {
   startY: number;
   startWidth: number;
   startHeight: number;
-  maxDelta: number;
+  maxPointerDelta: number;
 };
 
 type ExpandSession = {
@@ -78,6 +78,7 @@ type ExpandSession = {
   startY: number;
   delta: number;
   maxDelta: number;
+  maxPointerDelta: number;
   lastSampleAt: number;
   lastSampleDelta: number;
   velocity: number;
@@ -205,12 +206,12 @@ export function ResultSlideover({
   const finishResize = useCallback((pointerId: number) => {
     const session = resizeRef.current;
     if (!session || session.pointerId !== pointerId) return;
-    const maxDelta = session.maxDelta;
+    const maxPointerDelta = session.maxPointerDelta;
     resizeRef.current = null;
     setResizing(false);
     if (isMobile) {
       // Tap the grab chrome (no meaningful move) collapses, matching the peek UX.
-      if (maxDelta < OPEN_TAP_SLOP_PX) {
+      if (maxPointerDelta < OPEN_TAP_SLOP_PX) {
         onClose();
         return;
       }
@@ -367,7 +368,7 @@ export function ResultSlideover({
       startY: event.clientY,
       startWidth: width,
       startHeight: height,
-      maxDelta: 0,
+      maxPointerDelta: 0,
     };
     setResizing(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -377,16 +378,16 @@ export function ResultSlideover({
   const moveResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = resizeRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.maxPointerDelta = Math.max(
+      drag.maxPointerDelta,
+      Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY),
+    );
     if (isMobile) {
-      const travel = Math.abs(drag.startY - event.clientY);
-      drag.maxDelta = Math.max(drag.maxDelta, travel);
       const next = clampDragPanelHeight(drag.startHeight + (drag.startY - event.clientY));
       sizeRef.current = { ...sizeRef.current, height: next };
       setHeight(next);
       return;
     }
-    const travel = Math.abs(drag.startX - event.clientX);
-    drag.maxDelta = Math.max(drag.maxDelta, travel);
     const next = clampDragPanelWidth(drag.startWidth + (drag.startX - event.clientX));
     sizeRef.current = { ...sizeRef.current, width: next };
     setWidth(next);
@@ -434,7 +435,7 @@ export function ResultSlideover({
     expandRef.current = null;
     setResizing(false);
     const committed = session.maxDelta >= OPEN_DRAG_THRESHOLD_PX;
-    const isTap = session.maxDelta < OPEN_TAP_SLOP_PX;
+    const isTap = session.maxPointerDelta < OPEN_TAP_SLOP_PX;
     if (committed) {
       const peek = isMobile ? MOBILE_PEEK_HEIGHT_PX : PEEK_SIZE_PX;
       const revealed = peek + session.delta;
@@ -507,6 +508,7 @@ export function ResultSlideover({
       startY: event.clientY,
       delta: 0,
       maxDelta: 0,
+      maxPointerDelta: 0,
       lastSampleAt: performance.now(),
       lastSampleDelta: 0,
       velocity: 0,
@@ -520,6 +522,10 @@ export function ResultSlideover({
   const moveExpand = (event: ReactPointerEvent<HTMLElement>) => {
     const session = expandRef.current;
     if (!session || session.pointerId !== event.pointerId) return;
+    session.maxPointerDelta = Math.max(
+      session.maxPointerDelta,
+      Math.hypot(event.clientX - session.startX, event.clientY - session.startY),
+    );
     const delta = isMobile
       ? session.startY - event.clientY
       : session.startX - event.clientX;

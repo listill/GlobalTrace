@@ -444,7 +444,7 @@ describe("ResultSlideover", () => {
     expect(root.style.getPropertyValue("--result-panel-width")).toBe("420px");
   });
 
-  it("ends resizing when pointer capture is lost outside the handle", () => {
+  it("ends resizing when the pointer is released outside the handle", () => {
     mockMatchMedia(false);
     render(
       <I18nProvider locale="zh-CN">
@@ -484,6 +484,39 @@ describe("ResultSlideover", () => {
 
     expect(root.dataset.resizing).toBe("false");
     expect(root.style.getPropertyValue("--result-panel-width")).toBe(startingWidth);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("restores the mobile height when pointer capture is lost", () => {
+    mockMatchMedia(true);
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    const onClose = vi.fn();
+    render(
+      <I18nProvider locale="zh-CN">
+        <ResultSlideover open title="诊断结果" onOpen={vi.fn()} onClose={onClose}>
+          <div>result body</div>
+        </ResultSlideover>
+      </I18nProvider>,
+    );
+
+    const root = document.querySelector(".result-slideover") as HTMLElement;
+    const handle = screen.getByRole("separator", { name: "拖拽调整结果面板高度" });
+    const startingHeight = root.style.getPropertyValue("--result-panel-height");
+    fireEvent.pointerDown(handle, { button: 0, clientY: 400, pointerId: 19 });
+    fireEvent.pointerMove(handle, { clientY: 300, pointerId: 19 });
+    expect(root.style.getPropertyValue("--result-panel-height")).not.toBe(startingHeight);
+
+    fireEvent.lostPointerCapture(handle, { pointerId: 19 });
+
+    expect(root.dataset.resizing).toBe("false");
+    expect(root.style.getPropertyValue("--result-panel-height")).toBe(startingHeight);
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -616,6 +649,47 @@ describe("ResultSlideover", () => {
     );
   });
 
+  it("does not open the mobile peek after cross-axis or reverse swipes", () => {
+    mockMatchMedia(true);
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    const onOpen = vi.fn();
+    render(
+      <I18nProvider locale="zh-CN">
+        <ResultSlideover open={false} title="诊断结果" onOpen={onOpen} onClose={vi.fn()}>
+          <div>result body</div>
+        </ResultSlideover>
+      </I18nProvider>,
+    );
+
+    const peek = screen.getByRole("button", { name: "查看结果" });
+    fireEvent.pointerDown(peek, {
+      button: 0,
+      clientX: 120,
+      clientY: 800,
+      pointerId: 20,
+    });
+    fireEvent.pointerMove(peek, { clientX: 220, clientY: 800, pointerId: 20 });
+    fireEvent.pointerUp(peek, { clientX: 220, clientY: 800, pointerId: 20 });
+
+    fireEvent.pointerDown(peek, {
+      button: 0,
+      clientX: 120,
+      clientY: 800,
+      pointerId: 21,
+    });
+    fireEvent.pointerMove(peek, { clientX: 120, clientY: 900, pointerId: 21 });
+    fireEvent.pointerUp(peek, { clientX: 120, clientY: 900, pointerId: 21 });
+
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it("keeps a real overflow hit target above the mobile peek grip", () => {
     mockMatchMedia(true);
     Object.defineProperty(window, "innerWidth", {
@@ -635,8 +709,9 @@ describe("ResultSlideover", () => {
       </I18nProvider>,
     );
 
-    const hit = document.querySelector(".result-slideover-peek-hit") as HTMLElement;
+    const hit = document.querySelector<HTMLElement>(".result-slideover-peek-hit");
     expect(hit).not.toBeNull();
+    if (!hit) throw new Error("mobile result peek hit target is missing");
     expect(hit.getAttribute("aria-hidden")).toBe("true");
     // jsdom does not apply stylesheet layout; assert the dedicated hit node exists
     // inside the peek control (replacing the non-hittable overflowing ::after).
@@ -746,5 +821,37 @@ describe("ResultSlideover", () => {
     fireEvent.pointerUp(handle, { clientY: 240, pointerId: 8 });
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not collapse the bottom sheet after a cross-axis swipe", () => {
+    mockMatchMedia(true);
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    const onClose = vi.fn();
+    render(
+      <I18nProvider locale="zh-CN">
+        <ResultSlideover open title="诊断结果" onOpen={vi.fn()} onClose={onClose}>
+          <div>result body</div>
+        </ResultSlideover>
+      </I18nProvider>,
+    );
+
+    const handle = screen.getByRole("separator", { name: "拖拽调整结果面板高度" });
+    fireEvent.pointerDown(handle, {
+      button: 0,
+      clientX: 120,
+      clientY: 240,
+      pointerId: 22,
+    });
+    fireEvent.pointerMove(handle, { clientX: 220, clientY: 240, pointerId: 22 });
+    fireEvent.pointerUp(handle, { clientX: 220, clientY: 240, pointerId: 22 });
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

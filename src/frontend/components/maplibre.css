@@ -252,3 +252,13 @@
 .result-map-popup-shell {
   z-index: 20;
 }
+
+@media (forced-colors: active) {
+  .map-section .maplibregl-ctrl-group button:focus:focus-visible,
+  .result-map .maplibregl-ctrl-group button:focus:focus-visible,
+  .map-section .maplibregl-ctrl-attrib-button:focus:focus-visible,
+  .result-map .maplibregl-ctrl-attrib-button:focus:focus-visible {
+    outline: 2px solid ButtonText;
+    outline-offset: -2px;
+  }
+}
