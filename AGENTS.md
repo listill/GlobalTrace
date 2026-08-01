@@ -12,6 +12,8 @@
 ## 项目事实
 
 - 前端：React + Vite + TypeScript + MapLibre。
+- 桌面工作区支持地图优先和表格优先布局；地图优先模式使用响应式 Probe 抽屉。
+- 结果使用桌面侧滑面板或移动端底部面板，并提供多 Probe 标签、逐跳明细和 2D / 3D 路径地图。
 - Worker：Hono on Cloudflare Workers Static Assets。
 - 测量来源：浏览器直接创建 Globalping `type: "mtr"` measurement。
 - 后端增强：Worker 调用 nxtrace API v4 batch GeoIP/ASN/whois。
@@ -35,14 +37,13 @@
 
 ## 验证命令
 
-常规代码改动按顺序执行：
+常规代码改动执行与 GitHub `Verify` job 一致的完整检查：
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-npm run smoke
+npm run verify
 ```
+
+`npm run verify` 包含 lint、typecheck、coverage test、build、performance budget 和 smoke tests。
 
 docs-only 改动不需要跑应用测试，除非文档内容依赖实际命令输出。
 
@@ -51,10 +52,7 @@ docs-only 改动不需要跑应用测试，除非文档内容依赖实际命令�
 用户明确说“提交并部署”，或用户要求实现改动且规定测试已通过、未要求停下时，默认执行最小安全提交、部署和线上验证：
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-npm run smoke
+npm run verify
 git push origin master
 ```
 

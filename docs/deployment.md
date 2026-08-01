@@ -110,12 +110,13 @@ git diff --check
 代码改动发布前执行完整验证：
 
 ```bash
-npm install
-npm run typecheck
-npm test
-npm run build
-npm run smoke
+npm ci
+npx playwright install chromium
+npm run verify
 ```
+
+`npm run verify` 依次运行 lint、typecheck、coverage test、build、performance budget、browser smoke 和 Worker Static Assets smoke，与 GitHub `Verify` job 的检查范围一致。
+Linux CI 或缺少 Chromium 系统依赖的环境使用 `npx playwright install --with-deps chromium`。
 
 docs-only 改动至少执行：
 
@@ -130,13 +131,13 @@ npm run smoke:browser
 npm run smoke:worker
 ```
 
-`smoke:browser` 使用本地 Vite server；`smoke:worker` 会构建 `dist`，再通过 `wrangler dev --local --assets dist` 验证 Worker Static Assets。
+`smoke:browser` 使用本地 Vite server；`smoke:worker` 会构建 `dist`，再通过跨平台 Node runner 启动本地 Worker，验证配置中的 Worker Static Assets。
 
 ## Cloudflare Builds 部署
 
 推送到 `master` 后：
 
-- GitHub Actions 执行验证：lint、typecheck、coverage test、build、smoke。
+- GitHub Actions 执行验证：lint、typecheck、coverage test、build、performance budget、smoke。
 - Cloudflare Builds 执行 `npm run build`。
 - Cloudflare Builds 执行 `node scripts/write-ci-wrangler-config.mjs && npx wrangler deploy --config .wrangler-ci.jsonc`。
 
@@ -158,10 +159,7 @@ npm run deploy:private
 如果用户要求“提交并部署”，默认顺序是：
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-npm run smoke
+npm run verify
 git status --short
 git diff --stat
 git add <本次相关文件>
